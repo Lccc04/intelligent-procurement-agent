@@ -4,8 +4,10 @@
 直接调用 Mock ERP 的数据
 """
 import json
-from typing import List
+from typing import Any, List
 from langchain_core.tools import tool
+from langgraph.types import interrupt
+from mock_erp.registry import get_erp_catalog, get_erp_dataset
 
 # ===== Mock 数据（与 Mock ERP 保持一致） =====
 
@@ -148,6 +150,19 @@ def order_create(part_id: str, quantity: int, unit_price: float, supplier_id: st
 
     sid = supplier_id or part["supplier_id"]
     total = quantity * unit_price
+
+    approval = interrupt({
+        "action_requests": [{
+            "name": "order_create",
+            "args": {"part_id": part_id, "quantity": quantity, "unit_price": unit_price, "supplier_id": sid},
+            "description": f"创建采购订单：{part['name']} x {quantity}，预计金额 {total:.2f} CNY",
+        }],
+        "review_configs": [{"action_name": "order_create", "allowed_decisions": ["approve", "reject"]}],
+        "type": "hitl_approval",
+    })
+    if not _is_approved(approval):
+        return json.dumps({"code": 0, "status": "cancelled", "message": "用户拒绝了订单创建，未写入 ERP"}, ensure_ascii=False)
+
     order_id = f"PO202605{len(ORDERS)+1:04d}"
 
     order = {
@@ -178,6 +193,17 @@ def order_update(order_id: str, quantity: int = 0, unit_price: float = 0, status
     """
     for o in ORDERS:
         if o["id"] == order_id:
+            approval = interrupt({
+                "action_requests": [{
+                    "name": "order_update",
+                    "args": {"order_id": order_id, "quantity": quantity, "unit_price": unit_price, "status": status},
+                    "description": f"更新采购订单 {order_id}",
+                }],
+                "review_configs": [{"action_name": "order_update", "allowed_decisions": ["approve", "reject"]}],
+                "type": "hitl_approval",
+            })
+            if not _is_approved(approval):
+                return json.dumps({"code": 0, "status": "cancelled", "message": "用户拒绝了订单更新，未写入 ERP"}, ensure_ascii=False)
             if quantity > 0:
                 o["quantity"] = quantity
                 o["total"] = quantity * o["unit_price"]
@@ -188,6 +214,19 @@ def order_update(order_id: str, quantity: int = 0, unit_price: float = 0, status
                 o["status"] = status
             return _mock_response(o, message="订单更新成功")
     return json.dumps({"code": -1, "message": "订单不存在"}, ensure_ascii=False)
+
+
+def _is_approved(value: Any) -> bool:
+    """Accept the UI payload and LangGraph HITL decision shapes."""
+    if isinstance(value, dict):
+        decisions = value.get("decisions") or value.get("decision") or []
+        if isinstance(decisions, dict):
+            decisions = [decisions]
+        for decision in decisions:
+            if isinstance(decision, dict) and str(decision.get("type", "")).lower() in {"approve", "approved", "accept"}:
+                return True
+        return str(value.get("type", "")).lower() in {"approve", "approved", "accept"}
+    return str(value).lower() in {"approve", "approved", "accept", "true"}
 
 
 @tool
@@ -219,6 +258,28 @@ def inventory_warning(threshold: int = 100) -> str:
     return _mock_response(warning, total=len(warning), threshold=threshold)
 
 
+@tool
+def erp_list() -> str:
+    """列出可用于测试的虚拟 ERP 租户。"""
+    return _mock_response(get_erp_catalog(), total=len(get_erp_catalog()), source="virtual_erp_registry")
+
+
+@tool
+def erp_snapshot(erp_id: str = "erp-central", category: str = "") -> str:
+    """读取指定虚拟 ERP 的供应商、物料和订单快照，用于跨 ERP 对比。"""
+    try:
+        dataset = get_erp_dataset(erp_id)
+        if category == "parts":
+            dataset = {"erp": dataset["erp"], "parts": dataset["parts"]}
+        elif category == "suppliers":
+            dataset = {"erp": dataset["erp"], "suppliers": dataset["suppliers"]}
+        elif category == "orders":
+            dataset = {"erp": dataset["erp"], "orders": dataset["orders"]}
+        return _mock_response(dataset, source="virtual_erp_registry", data_scope="erp_snapshot")
+    except ValueError as exc:
+        return json.dumps({"code": -1, "message": str(exc)}, ensure_ascii=False)
+
+
 def get_all_mock_tools() -> List:
     """获取所有 Mock 工具"""
     return [
@@ -231,4 +292,6 @@ def get_all_mock_tools() -> List:
         order_update,
         order_search_details,
         inventory_warning,
+        erp_list,
+        erp_snapshot,
     ]

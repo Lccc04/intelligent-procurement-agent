@@ -21,6 +21,7 @@ logs/*
 !logs/.gitkeep
 *.log
 download/
+.agent_runtime/
 
 # IDE and OS files
 .idea/
@@ -30,6 +31,5 @@ download/
 Thumbs.db
 
 # Temporary exports and local notes
-feishu-doc-text.txt
 *.tmp
 *.bak

@@ -4,7 +4,7 @@
 """
 import json
 import asyncio
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator, Dict, Any, Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -22,7 +22,7 @@ class ChatStreamRequest(BaseModel):
     message: str
     user_id: str = "default_user"
     username: str = "用户"
-    thread_id: str = None
+    thread_id: Optional[str] = None
 
 
 class ResumeRequest(BaseModel):
@@ -80,7 +80,9 @@ async def chat_stream(request: ChatStreamRequest):
 
             # 构造输入
             input_data = {
-                "messages": [("user", request.message)]
+                "messages": [("user", request.message)],
+                "user_id": request.user_id,
+                "username": request.username,
             }
 
             # 流式执行 Agent（双模式：messages + values）
@@ -111,6 +113,17 @@ async def chat_stream(request: ChatStreamRequest):
                                 interrupt_type = "order_info_supplement"
                             else:
                                 interrupt_type = "unknown"
+
+                            if interrupt_type == "hitl_approval":
+                                approval_record = loader.db.record_approval_trigger(
+                                    thread_id=thread_id,
+                                    user_id=request.user_id,
+                                    interrupt_data=interrupt_value,
+                                )
+                                interrupt_value = {
+                                    **interrupt_value,
+                                    "approval_id": approval_record["approval_id"],
+                                }
 
                             # 发送中断事件
                             yield sse_event("interrupt", {
@@ -213,6 +226,17 @@ async def chat_resume(thread_id: str, request: ResumeRequest):
         return {"code": -1, "message": "会话不存在"}
 
     # 清除中断状态
+    previous_interrupt = session.get("interrupt_data") or {}
+    if previous_interrupt.get("type") == "hitl_approval":
+        approval_data = previous_interrupt.get("data") or {}
+        decision_status = _approval_decision_status(request.resume)
+        if decision_status:
+            loader.db.record_approval_resolution(
+                approval_id=approval_data.get("approval_id", ""),
+                status=decision_status,
+                thread_id=thread_id,
+                user_id=session.get("user_id", "default_user"),
+            )
     loader.clear_interrupted(thread_id)
 
     config = loader.create_config(thread_id)
@@ -249,6 +273,17 @@ async def chat_resume(thread_id: str, request: ResumeRequest):
                                 interrupt_type = "order_info_supplement"
                             else:
                                 interrupt_type = "unknown"
+
+                            if interrupt_type == "hitl_approval":
+                                approval_record = loader.db.record_approval_trigger(
+                                    thread_id=thread_id,
+                                    user_id=session.get("user_id", "default_user"),
+                                    interrupt_data=interrupt_value,
+                                )
+                                interrupt_value = {
+                                    **interrupt_value,
+                                    "approval_id": approval_record["approval_id"],
+                                }
 
                             yield sse_event("interrupt", {
                                 "interrupt_type": interrupt_type,
@@ -309,6 +344,24 @@ async def chat_resume(thread_id: str, request: ResumeRequest):
     )
 
 
+def _approval_decision_status(resume: Dict[str, Any]) -> str:
+    """Normalize UI/LangGraph decision payloads for the audit ledger."""
+    decisions = resume.get("decisions") or resume.get("decision") or []
+    if isinstance(decisions, dict):
+        decisions = [decisions]
+    for decision in decisions:
+        if not isinstance(decision, dict):
+            continue
+        value = str(decision.get("type", decision.get("decision", ""))).lower()
+        if value in {"approve", "approved", "accept", "accepted"}:
+            return "approved"
+        if value in {"reject", "rejected", "deny", "denied"}:
+            return "rejected"
+        if value in {"cancel", "cancelled", "canceled", "abort", "aborted"}:
+            return "cancelled"
+    return ""
+
+
 # ===== 会话状态查询 =====
 
 @router.get("/{thread_id}/state")
@@ -335,8 +388,5 @@ async def chat_state(thread_id: str):
 @router.get("/async-task/{task_id}")
 async def get_async_task_status(task_id: str):
     """查询异步任务状态"""
-    from agent.tools.async_tools import _async_tasks
-    task = _async_tasks.get(task_id)
-    if not task:
-        return {"code": -1, "message": "任务不存在", "task_id": task_id}
-    return {"code": 0, **task}
+    from agent.tools.async_tools import check_async_task
+    return json.loads(check_async_task.invoke({"task_id": task_id}))

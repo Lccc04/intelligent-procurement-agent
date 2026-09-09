@@ -10,7 +10,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    前端 (Vue/HTML)                        │
+│                    前端 (Vue 3 + Element Plus)             │
 │              聊天界面 + 中断审批 + 异步任务                │
 └────────────────────────┬────────────────────────────────┘
                          │ SSE 流式
@@ -26,7 +26,7 @@
 │  │ (调度)    │  │ (异步子Agent) │  │ (同步子Agent+HITL)│  │
 │  └──────────┘  └──────────────┘  └──────────────────┘  │
 │  ┌─────────────────────────────────────────────────────┐ │
-│  │              中间件栈 (8个)                           │ │
+│  │              中间件栈 (7个)                           │ │
 │  │  健康检查 → 上下文注入 → 技能同步 → 摘要压缩         │ │
 │  │  → 记忆更新 → 熔断保护 → 调用限制                     │ │
 │  └─────────────────────────────────────────────────────┘ │
@@ -87,7 +87,8 @@ procurement-agent/
 ├── src/
 │   ├── api_view/                    # Web 层 - FastAPI
 │   │   ├── web_main.py             # 应用入口
-│   │   ├── web_config.py           # 数据库配置
+│   │   ├── web_config.py           # 持久化入口（文件/MongoDB）
+│   │   ├── persistence.py          # 本地 JSON / MongoDB 适配器
 │   │   ├── agent_loader.py         # Agent 单例管理
 │   │   └── api/
 │   │       ├── chat.py             # SSE 流式对话 + 中断恢复
@@ -112,7 +113,12 @@ procurement-agent/
 │   │   │   ├── mock_tools.py       # 本地 Mock 工具
 │   │   │   ├── planning_tools.py   # write_todos 规划
 │   │   │   ├── hitl_tools.py       # HITL 人工介入
-│   │   │   ├── async_tools.py      # 异步任务
+│   │   │   ├── async_tools.py      # 持久化异步任务、报告、图表
+│   │   │   ├── file_tools.py       # 主 Agent 文件工具链
+│   │   │   ├── skill_tools.py      # 技能下载/创建/测试/分配/持久化
+│   │   │   ├── chart_tools.py      # ECharts 结构化图表
+│   │   │   ├── tool_registry.py    # 统一工具注册
+│   │   │   ├── knowledge_tools.py  # RAG 接口预留
 │   │   │   └── subagent_tools.py   # 子 Agent 委派
 │   │   └── backends/                # 沙箱后端
 │   ├── mcp_server/                  # MCP 网关层
@@ -124,7 +130,8 @@ procurement-agent/
 │   │   └── main.py
 │   └── skills/                      # 技能库
 ├── frontend/
-│   └── index.html                   # 前端页面
+│   ├── index.html                   # Vue 3 + Element Plus 入口
+│   └── app.js                       # 组件化聊天、审批、任务和图表
 ├── requirements.txt
 ├── .env.example
 ├── start.bat
@@ -193,7 +200,7 @@ Agent 会：
 | DeepAgents 框架 | LangGraph (create_react_agent) |
 | OpenSandbox | Docker SDK 容器沙箱 |
 | Agent Protocol Server | asyncio 异步任务 |
-| MongoDB | 内存存储 (可无缝替换为 MongoDB) |
+| MongoDB | 本地 JSON 默认模式；设置 `PERSISTENCE_BACKEND=mongo` 切换 MongoDB |
 | MCP 工具 | MCP 标准协议 (完全一致) |
 | HITL interrupt | LangGraph interrupt() (完全一致) |
 | 中间件栈 | LangGraph 节点钩子 (设计一致) |
@@ -201,50 +208,21 @@ Agent 会：
 
 ## 扩展方向
 
-1. **接入真实 ERP**：将 mock_erp 替换为真实 Java ERP 接口
-2. **MongoDB 持久化**：将 web_config.py 的 InMemoryDB 替换为 MongoDB
-3. **Docker 沙箱**：实现 backends/ 下的沙箱管理，支持代码执行
-4. **更多子 Agent**：在 subagents/configs/ 下添加 YAML 配置即可扩展
-5. **前端优化**：将 HTML 替换为 Vue + Element Plus，支持图表渲染
-6. **向量检索**：接入 RAG，支持采购文档知识库问答
-
-## 与飞书方案文档的差异
-
-飞书文档《基于Harness Engineering架构的企业实战项目》描述的是较完整的原版方案；当前仓库是一个可以直接启动的简化实现。两者的核心理念一致，但底层实现并不完全相同。
-
-| 能力 | 飞书文档中的方案 | 当前仓库状态 |
-|---|---|---|
-| Agent 框架 | DeepAgents / `create_deep_agent` | LangGraph / `create_react_agent` |
-| 文件系统 | `CompositeBackend` 路由临时文件、用户记忆和持久化技能 | 已有 Docker 沙箱代理骨架，但没有接入主 Agent 的文件工具链 |
-| 沙箱 | OpenSandbox，支持预热、认领、故障热替换和技能同步 | Docker SDK 基础版本；可创建、执行、检查和销毁，但生命周期状态、预热池和热替换仍需完善 |
-| 数据存储 | `StoreBackend` + MongoDB，保存用户记忆和技能 | `InMemoryDB`，服务重启后会丢失会话和偏好；MongoDB 配置已预留 |
-| ERP 工具 | MCP 连接 Java ERP，另有图表、搜索等工具 | 主 Agent 当前直接加载本地 Mock 工具；MCP 客户端和 Mock ERP 接口已保留 |
-| 采购分析 | 独立 Agent Protocol Server 后台运行，使用真实分析流程 | `asyncio.create_task` 模拟后台任务，返回模拟报告和图表数据 |
-| 子 Agent | `procurement-analyst` 和 `procurement-order` 按完整配置弹性加载 | YAML 加载和订单子 Agent 可用；采购分析子 Agent 被强制走模拟异步任务 |
-| Skills | 渐进式披露、下载、创建、测试、分配、持久化和恢复 | 已有 SKILL.md、提示词和部分同步骨架；下载、分配、持久化恢复尚未实现 |
-| 中间件 | 8 个中间件覆盖健康检查、上下文、技能、摘要、记忆和熔断 | 相关模块基本存在，但没有完整挂载到 LangGraph 执行链 |
-| HITL | `request_order_info` + `interrupt_on` 双层中断 | 已实现信息补充中断和审批恢复接口；订单工具审批链还需要进一步端到端验证 |
-| 前端 | 支持异步任务轮询、报告和图表展示 | 原生 HTML 聊天页；SSE 已修复，可显示流式回答，但还没有真正渲染图表 |
-
-### 目前最明显的代码差异
-
-1. 飞书文档中的 `CompositeBackend`、`StoreBackend`、真实 MongoDB 和 OpenSandbox，在当前仓库中分别对应简化的内存数据库、Docker 封装和若干未接入的中间件骨架。
-2. 飞书文档中的 `Agent Protocol Server` 是独立后台 Agent 服务；当前项目的 `start_async_task` 只是进程内异步任务，服务重启后任务状态会丢失。
-3. 飞书文档提到的 `web_search`、`chart_generator`、`assign_skill`、`download_sandbox_file` 等工具，当前仓库没有完整实现。
-4. 当前 `main_agent.py` 虽然保留了 MCP 客户端，但实际初始化时调用的是 `get_all_mock_tools()`，因此默认不会访问 Mock ERP HTTP 服务，更不会访问真实 Java ERP。
-5. 部分 YAML 配置引用了 `execute_code`、`write_file`、`read_file` 等工具名，但当前子 Agent 的可用工具集合主要是 Mock ERP 工具，工具配置和实际运行能力还没有完全对齐。
+1. **接入真实 ERP**：将 Mock 适配器替换为真实 Java ERP 的 REST/MCP 适配器
+2. **MongoDB 持久化**：设置 `PERSISTENCE_BACKEND=mongo`，复用统一持久化接口
+3. **Docker 沙箱**：设置 `SANDBOX_ENABLED=true` 后启用隔离代码执行
+4. **更多子 Agent**：在 `subagents/configs/` 下添加 YAML 配置即可热加载
+5. **前端优化**：Vue 3 + Element Plus + ECharts 已接入，后续可增加鉴权和权限视图
+6. **向量检索**：`knowledge_search` 接口已预留，后续接入采购文档向量库
 
 ## 结合本项目的扩展落地顺序
 
 建议按照“先真实可用，再增强架构”的顺序推进：
 
-1. **真实 ERP 适配层**：保留 Python Agent，不要求改成 Java。通过 REST、SOAP、WebSocket 或消息队列调用 Java ERP；在 `mcp_server/tools/` 中把 Mock 数据替换成 ERP API 适配器，并保留 Mock 模式用于本地测试。
-2. **MongoDB 持久化**：先替换会话、消息和用户偏好的 `InMemoryDB`，再把 `/memories/{user_id}/` 和技能数据纳入统一存储。这样才能支持服务重启后恢复对话、偏好和异步任务。
-3. **真正的异步分析服务**：把当前 `asyncio.create_task` 抽成独立的 Agent Protocol 或任务服务，保存 `task_id`、状态、进度、错误和结果，前端再轮询或改用 SSE 推送。
-4. **Docker 沙箱接入 Agent**：补齐代码执行、文件读写、文件下载、超时、资源限制、网络策略和故障热替换，并把 `execute_code` 等工具真正挂载到采购分析子 Agent。
-5. **子 Agent 和 Skills 扩展**：继续使用 YAML 声明式配置，但增加工具名校验、配置版本、权限范围和启动时自检，避免配置写了工具而运行时找不到。
-6. **前端升级**：当后端接口稳定后再迁移 Vue + Element Plus；优先加入异步任务进度、Markdown 报告下载、供应商/库存图表和审批操作记录。
-7. **RAG 接口预留**：新增统一的 `knowledge_search(query, filters, top_k)` 工具接口，先返回“知识库未配置”的明确结果；后续再接向量数据库、文档解析、切片、Embedding 和采购制度权限过滤。
+1. **真实 ERP 适配层**：保留 Python Agent，通过 REST、SOAP、WebSocket 或消息队列调用 Java ERP；在 `mcp_server/tools/` 中替换 Mock 适配器，并保留 Mock 模式用于本地测试。
+2. **独立异步服务**：将当前持久化线程池拆成 Agent Protocol / 消息队列服务，支持多实例和重试策略。
+3. **Docker 沙箱生产化**：补充容器预热池、租约、文件归档、资源配额、审计日志和故障热替换。
+4. **RAG 实现**：为 `knowledge_search` 接入文档解析、切片、Embedding、向量数据库和采购制度权限过滤。
 
 ### RAG 预留接口建议
 

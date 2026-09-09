@@ -15,7 +15,7 @@ class UserSkillsRestoreMiddleware:
 
     def before_agent(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """沙箱创建后恢复用户技能"""
-        if not self.db or not self.sandbox_manager:
+        if not self.db:
             return state
 
         try:
@@ -24,9 +24,7 @@ class UserSkillsRestoreMiddleware:
             user_skills = self._get_user_skills(user_id)
             if user_skills:
                 log.info(f"🔄 恢复用户技能: user_id={user_id}, skills={user_skills}")
-                # 恢复到沙箱
-                # for skill in user_skills:
-                #     self.sandbox_manager.restore_skill(skill)
+                state["assigned_skills"] = user_skills
         except Exception as e:
             log.error(f"用户技能恢复失败: {e}")
 
@@ -34,5 +32,6 @@ class UserSkillsRestoreMiddleware:
 
     def _get_user_skills(self, user_id: str) -> List[str]:
         """获取用户已分配的技能列表"""
-        # 实际项目中从数据库查询
+        if hasattr(self.db, "get_skills"):
+            return [item.get("name") for item in self.db.get_skills(user_id) if item.get("status") == "assigned"]
         return []

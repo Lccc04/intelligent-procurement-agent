@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
+from mock_erp.registry import get_erp_catalog, get_erp_dataset
 
 app = FastAPI(title="Mock ERP Service")
 
@@ -53,6 +54,25 @@ class OrderUpdateRequest(BaseModel):
 
 
 # ===== 接口 =====
+
+@app.get("/api/erps")
+async def list_erps():
+    return {"code": 0, "data": get_erp_catalog(), "total": len(get_erp_catalog())}
+
+
+@app.get("/api/erps/{erp_id}/snapshot")
+async def erp_snapshot(erp_id: str, category: str = ""):
+    try:
+        dataset = get_erp_dataset(erp_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    if category == "parts":
+        dataset = {"erp": dataset["erp"], "parts": dataset["parts"]}
+    elif category == "suppliers":
+        dataset = {"erp": dataset["erp"], "suppliers": dataset["suppliers"]}
+    elif category == "orders":
+        dataset = {"erp": dataset["erp"], "orders": dataset["orders"]}
+    return {"code": 0, "data": dataset, "source": "virtual_erp_registry"}
 
 @app.get("/api/suppliers")
 async def query_suppliers(keyword: str = "", category: str = ""):

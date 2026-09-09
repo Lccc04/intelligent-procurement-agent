@@ -41,15 +41,18 @@ class MemoryUpdateMiddleware:
         recent_suppliers = []
 
         for msg in messages:
-            if isinstance(msg, dict) and msg.get("role") == "user":
+            if isinstance(msg, dict):
+                role = msg.get("role")
                 content = msg.get("content", "")
-                if isinstance(content, str):
-                    recent_queries.append(content[:100])
-                    # 简单的供应商识别
-                    suppliers = ["博世", "大陆", "采埃孚", "福耀", "华翔"]
-                    for s in suppliers:
-                        if s in content:
-                            recent_suppliers.append(s)
+            else:
+                role = getattr(msg, "type", None)
+                content = getattr(msg, "content", "")
+            if role in {"user", "human"} and isinstance(content, str):
+                recent_queries.append(content[:100])
+                suppliers = ["博世", "大陆", "采埃孚", "福耀", "华翔"]
+                for supplier in suppliers:
+                    if supplier in content:
+                        recent_suppliers.append(supplier)
 
         if recent_queries:
             preferences["recent_queries"] = recent_queries[-5:]  # 保留最近5条

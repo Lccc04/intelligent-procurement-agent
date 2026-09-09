@@ -1,4 +1,5 @@
 name: procurement-order
+execution_mode: sync
 description: >
   采购订单专家，负责采购订单的创建、更新和查询管理。
   支持双层人工介入：数据补充 + 最终审批。

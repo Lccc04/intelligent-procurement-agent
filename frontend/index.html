@@ -1,728 +1,85 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能采购助手 - Harness Engineering Agent</title>
+    <title>智能采购助手</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f7fa;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 16px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .header h1 { font-size: 18px; font-weight: 600; }
-        .header .badge {
-            background: rgba(255,255,255,0.2);
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-        }
-        .container {
-            flex: 1;
-            display: flex;
-            overflow: hidden;
-        }
-        .sidebar {
-            width: 260px;
-            background: white;
-            border-right: 1px solid #e8e8e8;
-            display: flex;
-            flex-direction: column;
-        }
-        .sidebar-header {
-            padding: 16px;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        .new-chat-btn {
-            width: 100%;
-            padding: 10px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-        .new-chat-btn:hover { background: #5568d3; }
-        .session-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 8px;
-        }
-        .session-item {
-            padding: 10px 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-bottom: 4px;
-            transition: all 0.2s;
-        }
-        .session-item:hover { background: #f5f7fa; }
-        .session-item.active { background: #eef1ff; }
-        .session-item .title {
-            font-size: 13px;
-            color: #333;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .session-item .time {
-            font-size: 11px;
-            color: #999;
-            margin-top: 4px;
-        }
-        .chat-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: #f5f7fa;
-        }
-        .messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 24px;
-        }
-        .message {
-            max-width: 80%;
-            margin-bottom: 20px;
-            display: flex;
-        }
-        .message.user { justify-content: flex-end; margin-left: auto; }
-        .message.assistant { justify-content: flex-start; }
-        .message-content {
-            padding: 12px 16px;
-            border-radius: 12px;
-            line-height: 1.6;
-            font-size: 14px;
-        }
-        .message.user .message-content {
-            background: #667eea;
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-        .message.assistant .message-content {
-            background: white;
-            color: #333;
-            border-bottom-left-radius: 4px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
-        .message-content pre {
-            background: #f6f8fa;
-            padding: 12px;
-            border-radius: 6px;
-            overflow-x: auto;
-            margin: 8px 0;
-        }
-        .message-content code {
-            font-family: 'Consolas', monospace;
-            font-size: 13px;
-        }
-        .message-content table {
-            border-collapse: collapse;
-            width: 100%;
-            margin: 8px 0;
-        }
-        .message-content th, .message-content td {
-            border: 1px solid #e8e8e8;
-            padding: 8px 12px;
-            text-align: left;
-            font-size: 13px;
-        }
-        .message-content th { background: #fafafa; }
-        .tool-call {
-            background: #fffbe6;
-            border: 1px solid #ffe58f;
-            border-radius: 8px;
-            padding: 8px 12px;
-            margin: 8px 0;
-            font-size: 12px;
-        }
-        .tool-call .tool-name {
-            color: #d48806;
-            font-weight: 600;
-        }
-        .interrupt-banner {
-            background: #e6f7ff;
-            border: 1px solid #91d5ff;
-            border-radius: 12px;
-            padding: 16px;
-            margin: 16px 0;
-        }
-        .interrupt-banner h4 {
-            color: #1890ff;
-            margin-bottom: 12px;
-        }
-        .interrupt-banner .form-group {
-            margin-bottom: 12px;
-        }
-        .interrupt-banner label {
-            display: block;
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 4px;
-        }
-        .interrupt-banner input, .interrupt-banner textarea {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #d9d9d9;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        .interrupt-banner .btn-group {
-            display: flex;
-            gap: 8px;
-        }
-        .btn {
-            padding: 8px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-        .btn-primary { background: #667eea; color: white; }
-        .btn-primary:hover { background: #5568d3; }
-        .btn-success { background: #52c41a; color: white; }
-        .btn-success:hover { background: #389e0d; }
-        .btn-danger { background: #ff4d4f; color: white; }
-        .btn-danger:hover { background: #cf1322; }
-        .input-area {
-            background: white;
-            padding: 16px 24px;
-            border-top: 1px solid #e8e8e8;
-        }
-        .input-wrapper {
-            display: flex;
-            gap: 12px;
-            align-items: flex-end;
-        }
-        .input-wrapper textarea {
-            flex: 1;
-            padding: 12px 16px;
-            border: 1px solid #d9d9d9;
-            border-radius: 10px;
-            font-size: 14px;
-            resize: none;
-            min-height: 48px;
-            max-height: 150px;
-            font-family: inherit;
-        }
-        .input-wrapper textarea:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 2px rgba(102,126,234,0.2);
-        }
-        .send-btn {
-            padding: 12px 24px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-        .send-btn:hover { background: #5568d3; }
-        .send-btn:disabled { background: #ccc; cursor: not-allowed; }
-        .quick-questions {
-            padding: 12px 24px;
-            background: white;
-            border-top: 1px solid #f0f0f0;
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .quick-btn {
-            padding: 6px 14px;
-            background: #f5f7fa;
-            border: 1px solid #e8e8e8;
-            border-radius: 16px;
-            cursor: pointer;
-            font-size: 12px;
-            color: #666;
-            transition: all 0.2s;
-        }
-        .quick-btn:hover {
-            background: #eef1ff;
-            border-color: #667eea;
-            color: #667eea;
-        }
-        .typing-indicator {
-            display: flex;
-            gap: 4px;
-            padding: 12px 16px;
-        }
-        .typing-indicator span {
-            width: 8px;
-            height: 8px;
-            background: #999;
-            border-radius: 50%;
-            animation: typing 1.4s infinite;
-        }
-        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-8px); }
-        }
-        .async-task-card {
-            background: #f6ffed;
-            border: 1px solid #b7eb8f;
-            border-radius: 8px;
-            padding: 12px;
-            margin: 8px 0;
-        }
-        .async-task-card .status {
-            font-size: 12px;
-            color: #52c41a;
-            font-weight: 600;
-        }
+        :root { font-family: Inter, "Microsoft YaHei", sans-serif; color: #1f2933; background: #f4f6f8; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-width: 320px; }
+        button, textarea { font: inherit; }
+        #app { min-height: 100vh; }
+        .shell { min-height: 100vh; display: grid; grid-template-rows: 58px 1fr; }
+        .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 22px; color: #fff; background: #1f4d5c; }
+        .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0; }
+        .brand-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: #e0a458; color: #1f4d5c; font-size: 15px; }
+        .top-meta { display: flex; align-items: center; gap: 12px; font-size: 12px; color: #d8e7eb; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #7bd88f; }
+        .layout { min-height: 0; display: grid; grid-template-columns: 238px minmax(0, 1fr) 330px; }
+        .sidebar, .inspector { min-height: 0; background: #fff; }
+        .sidebar { border-right: 1px solid #e2e8ec; padding: 16px 12px; }
+        .inspector { border-left: 1px solid #e2e8ec; overflow: auto; padding: 16px; }
+        .sidebar-head, .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .sidebar-head { margin: 0 8px 14px; }
+        .sidebar-title, .panel-title { margin: 0; font-size: 14px; font-weight: 700; }
+        .session-list { display: grid; gap: 4px; overflow: auto; max-height: calc(100vh - 118px); }
+        .session { cursor: pointer; border: 0; border-left: 3px solid transparent; border-radius: 4px; padding: 10px 9px; text-align: left; background: transparent; color: #425466; }
+        .session:hover, .session.active { background: #edf5f6; border-left-color: #2d7b82; color: #173e49; }
+        .session-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+        .session-time { display: block; margin-top: 5px; color: #8b99a5; font-size: 11px; }
+        .chat { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto 1fr auto; background: #f8fafb; }
+        .chat-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid #e2e8ec; background: #fff; }
+        .chat-head h1 { margin: 0; font-size: 17px; }
+        .chat-head p { margin: 4px 0 0; color: #7a8791; font-size: 12px; }
+        .messages { overflow: auto; padding: 22px max(22px, calc((100% - 900px) / 2)); }
+        .message { display: flex; margin: 0 0 18px; }
+        .message.user { justify-content: flex-end; }
+        .bubble { max-width: min(780px, 88%); padding: 12px 14px; border-radius: 8px; line-height: 1.65; font-size: 14px; overflow-wrap: anywhere; }
+        .message.assistant .bubble { background: #fff; border: 1px solid #e1e8eb; }
+        .message.user .bubble { color: #fff; background: #2d7b82; }
+        .bubble :first-child { margin-top: 0; }
+        .bubble :last-child { margin-bottom: 0; }
+        .bubble table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+        .bubble th, .bubble td { border: 1px solid #dfe6e9; padding: 5px 7px; text-align: left; }
+        .bubble code { padding: 2px 4px; color: #7a421d; background: #fff4e6; border-radius: 3px; }
+        .tool-line { margin: 8px 0 14px; color: #6b7b85; font-size: 12px; }
+        .interrupt { margin: 8px 0 16px; padding: 14px; border-left: 4px solid #e0a458; background: #fffaf1; }
+        .interrupt h3 { margin: 0 0 8px; font-size: 14px; }
+        .interrupt pre { max-height: 180px; overflow: auto; padding: 9px; background: #fff; font-size: 11px; }
+        .interrupt-actions { display: flex; gap: 8px; margin-top: 12px; }
+        .input-dock { padding: 12px 22px 18px; border-top: 1px solid #e2e8ec; background: #fff; }
+        .quick-row { display: flex; gap: 7px; overflow-x: auto; margin-bottom: 10px; }
+        .quick-row button { flex: 0 0 auto; padding: 6px 10px; border: 1px solid #d5e1e4; border-radius: 14px; background: #f5f9fa; color: #35616a; cursor: pointer; font-size: 12px; }
+        .composer { display: flex; gap: 10px; align-items: flex-end; max-width: 1000px; margin: auto; }
+        .composer textarea { flex: 1; min-height: 42px; max-height: 130px; resize: vertical; padding: 11px 12px; border: 1px solid #ccd9de; border-radius: 6px; outline: none; }
+        .composer textarea:focus { border-color: #2d7b82; box-shadow: 0 0 0 2px rgba(45,123,130,.12); }
+        .inspector-section { padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid #edf0f2; }
+        .section-caption { margin: 14px 0 8px; color: #7b8992; font-size: 12px; }
+        .task-item, .artifact-item, .erp-item { padding: 9px 0; border-bottom: 1px solid #edf0f2; }
+        .task-item { cursor: pointer; }
+        .task-item:hover { background: #f7fafb; }
+        .task-name { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+        .task-stage, .artifact-item small, .erp-item small { color: #86939c; font-size: 11px; }
+        .approval-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 10px; }
+        .approval-metric { padding: 9px 8px; border: 1px solid #e6edef; border-radius: 5px; background: #f8fbfb; }
+        .approval-metric strong { display: block; color: #1f4d5c; font-size: 18px; line-height: 1.1; }
+        .approval-metric span { display: block; margin-top: 4px; color: #86939c; font-size: 11px; }
+        .approval-note { margin-top: 9px; color: #86939c; font-size: 11px; }
+        .report { max-height: 320px; overflow: auto; margin-top: 10px; padding: 10px; background: #f7f9fa; font-size: 12px; line-height: 1.6; }
+        .empty { padding: 20px 0; color: #9aa6ad; text-align: center; font-size: 12px; }
+        @media (max-width: 1060px) { .layout { grid-template-columns: 210px minmax(0, 1fr); } .inspector { display: none; } }
+        @media (max-width: 680px) { .layout { display: block; } .sidebar { display: none; } .chat { min-height: calc(100vh - 58px); } .topbar { padding: 0 14px; } .top-meta span { display: none; } .messages { padding: 16px 12px; } .input-dock { padding: 10px 12px 14px; } .chat-head { padding: 13px 14px; } }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🤖 智能采购助手</h1>
-        <span class="badge">Harness Engineering v1.0</span>
-    </div>
-    <div class="container">
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <button class="new-chat-btn" onclick="newChat()">+ 新建对话</button>
-            </div>
-            <div class="session-list" id="sessionList"></div>
-        </div>
-        <div class="chat-area">
-            <div class="messages" id="messages">
-                <div class="message assistant">
-                    <div class="message-content">
-                        你好！我是智能采购助手，基于 Harness Engineering 架构构建。<br><br>
-                        我可以帮你：<br>
-                        📊 <b>采购分析</b>：查询供应商、物料、库存数据，进行价格趋势分析<br>
-                        📝 <b>订单管理</b>：创建、更新、查询采购订单（支持人工审批）<br>
-                        🔍 <b>数据查询</b>：供应商对比、物料搜索、库存预警<br><br>
-                        试试点击下方的快捷问题，或者直接输入你的需求！
-                    </div>
-                </div>
-            </div>
-            <div class="quick-questions">
-                <button class="quick-btn" onclick="sendQuickMessage('查询刹车片的供应商有哪些')">查询刹车片供应商</button>
-                <button class="quick-btn" onclick="sendQuickMessage('帮我分析一下制动系统物料的价格趋势')">价格趋势分析</button>
-                <button class="quick-btn" onclick="sendQuickMessage('创建一个采购订单，采购100套前刹车片')">创建采购订单</button>
-                <button class="quick-btn" onclick="sendQuickMessage('查询库存预警信息')">库存预警查询</button>
-            </div>
-            <div class="input-area">
-                <div class="input-wrapper">
-                    <textarea id="messageInput" placeholder="输入你的问题..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
-                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let currentThreadId = null;
-        let isStreaming = false;
-        let currentInterrupt = null;
-        const API_BASE = '';
-
-        // 初始化
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSessions();
-        });
-
-        // 加载会话列表
-        async function loadSessions() {
-            try {
-                const resp = await fetch(`${API_BASE}/api/history/sessions`);
-                const data = await resp.json();
-                const list = document.getElementById('sessionList');
-                list.innerHTML = '';
-                data.data.forEach(session => {
-                    const item = document.createElement('div');
-                    item.className = 'session-item' + (session.thread_id === currentThreadId ? ' active' : '');
-                    item.innerHTML = `
-                        <div class="title">${session.last_message || '新对话'}</div>
-                        <div class="time">${new Date(session.updated_at * 1000).toLocaleString()}</div>
-                    `;
-                    item.onclick = () => loadSession(session.thread_id);
-                    list.appendChild(item);
-                });
-            } catch (e) {
-                console.error('加载会话失败', e);
-            }
-        }
-
-        // 加载会话
-        async function loadSession(threadId) {
-            currentThreadId = threadId;
-            try {
-                const resp = await fetch(`${API_BASE}/api/history/${threadId}/messages`);
-                const data = await resp.json();
-                const messagesDiv = document.getElementById('messages');
-                messagesDiv.innerHTML = '';
-                data.data.forEach(msg => {
-                    appendMessage(msg.role, msg.content);
-                });
-                loadSessions();
-            } catch (e) {
-                console.error('加载会话失败', e);
-            }
-        }
-
-        // 新建对话
-        function newChat() {
-            currentThreadId = null;
-            document.getElementById('messages').innerHTML = `
-                <div class="message assistant">
-                    <div class="message-content">
-                        你好！我是智能采购助手，有什么可以帮你的？
-                    </div>
-                </div>
-            `;
-            loadSessions();
-        }
-
-        // 快捷消息
-        function sendQuickMessage(msg) {
-            document.getElementById('messageInput').value = msg;
-            sendMessage();
-        }
-
-        // 发送消息
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
-            if (!message || isStreaming) return;
-
-            input.value = '';
-            isStreaming = true;
-            document.getElementById('sendBtn').disabled = true;
-
-            // 显示用户消息
-            appendMessage('user', message);
-
-            // 显示打字指示器
-            const typingDiv = showTypingIndicator();
-
-            try {
-                const resp = await fetch(`${API_BASE}/api/chat/stream`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: message,
-                        thread_id: currentThreadId,
-                        user_id: 'default_user',
-                        username: '用户'
-                    })
-                });
-
-                const reader = resp.body.getReader();
-                const decoder = new TextDecoder();
-                let assistantContent = '';
-                let currentToolCall = null;
-                let sseBuffer = '';
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    sseBuffer += decoder.decode(value, { stream: true });
-                    const events = sseBuffer.split(/\r?\n\r?\n/);
-                    sseBuffer = events.pop() || '';
-
-                    for (const rawEvent of events) {
-                        const parsed = parseSSEEvent(rawEvent);
-                        if (!parsed) continue;
-                        const { eventType, data } = parsed;
-                        handleSSEEvent(data, eventType, typingDiv, () => {
-                            assistantContent += data.content || '';
-                        }, (toolData) => {
-                            currentToolCall = toolData;
-                        });
-                    }
-                }
-
-                const finalEvent = parseSSEEvent(sseBuffer);
-                if (finalEvent) {
-                    handleSSEEvent(finalEvent.data, finalEvent.eventType, typingDiv, () => {
-                        assistantContent += finalEvent.data.content || '';
-                    }, (toolData) => {
-                        currentToolCall = toolData;
-                    });
-                }
-
-                // 移除打字指示器
-                typingDiv.remove();
-
-                // 显示助手最终消息
-                if (assistantContent) {
-                    appendMessage('assistant', assistantContent);
-                }
-
-                loadSessions();
-
-            } catch (e) {
-                typingDiv.remove();
-                appendMessage('assistant', '❌ 发生错误：' + e.message);
-            }
-
-            isStreaming = false;
-            document.getElementById('sendBtn').disabled = false;
-        }
-
-        // 处理 SSE 事件
-        function parseSSEEvent(rawEvent) {
-            if (!rawEvent || !rawEvent.trim()) return null;
-            let eventType = 'message';
-            const dataLines = [];
-
-            rawEvent.split(/\r?\n/).forEach(line => {
-                if (line.startsWith('event:')) {
-                    eventType = line.substring(6).trim();
-                } else if (line.startsWith('data:')) {
-                    dataLines.push(line.substring(5).trimStart());
-                }
-            });
-
-            if (!dataLines.length) return null;
-            try {
-                return { eventType, data: JSON.parse(dataLines.join('\n')) };
-            } catch (e) {
-                console.error('SSE 数据解析失败', e, rawEvent);
-                return null;
-            }
-        }
-
-        // 处理 SSE 事件
-        function handleSSEEvent(data, eventType, typingDiv, onToken, onTool) {
-            data.type = data.type || eventType;
-            if (data.thread_id) {
-                currentThreadId = data.thread_id;
-            }
-            if (data.type === 'token' && data.content) {
-                onToken(data);
-                // 实时更新最后一条消息
-                updateLastAssistantMessage(data.content);
-            }
-            if (data.type === 'tool_start') {
-                showToolCall(data.tool, '开始调用...');
-            }
-            if (data.type === 'tool_result') {
-                showToolCall(data.tool, data.content?.substring(0, 200) || '');
-            }
-            if (data.type === 'interrupt') {
-                currentInterrupt = data;
-                showInterruptBanner(data);
-            }
-            if (data.type === 'error') {
-                appendMessage('assistant', '❌ ' + (data.message || '服务调用失败'));
-            }
-            if (data.interrupted) {
-                isStreaming = false;
-                document.getElementById('sendBtn').disabled = false;
-            }
-        }
-
-        // 追加消息
-        function appendMessage(role, content) {
-            const messagesDiv = document.getElementById('messages');
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'message ' + role;
-            msgDiv.innerHTML = `<div class="message-content">${renderMarkdown(content)}</div>`;
-            messagesDiv.appendChild(msgDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
-        // 更新最后一条助手消息（流式输出）
-        function updateLastAssistantMessage(content) {
-            const messagesDiv = document.getElementById('messages');
-            const assistantMsgs = messagesDiv.querySelectorAll('.message.assistant .message-content');
-            if (assistantMsgs.length > 0) {
-                const last = assistantMsgs[assistantMsgs.length - 1];
-                last.innerHTML = renderMarkdown(last.textContent + content);
-            } else {
-                appendMessage('assistant', content);
-            }
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
-        // 显示打字指示器
-        function showTypingIndicator() {
-            const messagesDiv = document.getElementById('messages');
-            const div = document.createElement('div');
-            div.className = 'message assistant';
-            div.innerHTML = '<div class="message-content"><span class="typing-indicator"><span></span><span></span><span></span></span></div>';
-            messagesDiv.appendChild(div);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            return div;
-        }
-
-        // 显示工具调用
-        function showToolCall(toolName, content) {
-            const messagesDiv = document.getElementById('messages');
-            const div = document.createElement('div');
-            div.className = 'message assistant';
-            div.innerHTML = `<div class="tool-call"><span class="tool-name">🔧 ${toolName}</span><br>${content}</div>`;
-            messagesDiv.appendChild(div);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
-        // 显示中断横幅
-        function showInterruptBanner(data) {
-            const messagesDiv = document.getElementById('messages');
-            const div = document.createElement('div');
-            div.className = 'message assistant';
-            div.id = 'interruptBanner';
-
-            if (data.interrupt_type === 'order_info_supplement') {
-                const missing = data.data?.missing_fields || [];
-                div.innerHTML = `
-                    <div class="interrupt-banner">
-                        <h4>📋 需要补充订单信息</h4>
-                        <p style="font-size:13px;color:#666;margin-bottom:12px;">${data.data?.message || '请补充以下信息'}</p>
-                        ${missing.map(f => `
-                            <div class="form-group">
-                                <label>${f}</label>
-                                <input type="text" id="field_${f}" placeholder="请输入${f}">
-                            </div>
-                        `).join('')}
-                        <div class="btn-group">
-                            <button class="btn btn-primary" onclick="submitOrderInfo()">提交补充信息</button>
-                        </div>
-                    </div>
-                `;
-            } else if (data.interrupt_type === 'hitl_approval') {
-                div.innerHTML = `
-                    <div class="interrupt-banner">
-                        <h4>✅ 需要人工审批</h4>
-                        <p style="font-size:13px;color:#666;margin-bottom:12px;">请确认以下操作：</p>
-                        <pre style="background:#f6f8fa;padding:12px;border-radius:6px;font-size:12px;overflow-x:auto;">${JSON.stringify(data.data, null, 2)}</pre>
-                        <div class="btn-group">
-                            <button class="btn btn-success" onclick="approveAction()">批准</button>
-                            <button class="btn btn-danger" onclick="rejectAction()">拒绝</button>
-                        </div>
-                    </div>
-                `;
-            }
-            messagesDiv.appendChild(div);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
-        // 提交订单补充信息
-        async function submitOrderInfo() {
-            const banner = document.getElementById('interruptBanner');
-            const missing = currentInterrupt?.data?.missing_fields || [];
-            const supplement = {};
-            missing.forEach(f => {
-                const input = document.getElementById('field_' + f);
-                if (input) supplement[f] = input.value;
-            });
-
-            banner.innerHTML = '<div class="message-content">正在处理...</div>';
-            await resumeExecution({ supplement });
-        }
-
-        // 批准操作
-        async function approveAction() {
-            const banner = document.getElementById('interruptBanner');
-            banner.innerHTML = '<div class="message-content">正在执行...</div>';
-            await resumeExecution({ decisions: [{ type: 'approve' }] });
-        }
-
-        // 拒绝操作
-        async function rejectAction() {
-            const banner = document.getElementById('interruptBanner');
-            banner.innerHTML = '<div class="message-content">已取消操作</div>';
-            await resumeExecution({ decisions: [{ type: 'reject' }] });
-        }
-
-        // 恢复执行
-        async function resumeExecution(resumeData) {
-            isStreaming = true;
-            document.getElementById('sendBtn').disabled = true;
-            const typingDiv = showTypingIndicator();
-
-            try {
-                const resp = await fetch(`${API_BASE}/api/chat/${currentThreadId}/resume`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resume: resumeData })
-                });
-
-                const reader = resp.body.getReader();
-                const decoder = new TextDecoder();
-                let assistantContent = '';
-                let sseBuffer = '';
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    sseBuffer += decoder.decode(value, { stream: true });
-                    const events = sseBuffer.split(/\r?\n\r?\n/);
-                    sseBuffer = events.pop() || '';
-                    for (const rawEvent of events) {
-                        const parsed = parseSSEEvent(rawEvent);
-                        if (!parsed) continue;
-                        handleSSEEvent(parsed.data, parsed.eventType, typingDiv, (data) => {
-                            assistantContent += data.content || '';
-                        });
-                    }
-                }
-
-                const finalEvent = parseSSEEvent(sseBuffer);
-                if (finalEvent) {
-                    handleSSEEvent(finalEvent.data, finalEvent.eventType, typingDiv, (data) => {
-                        assistantContent += data.content || '';
-                    });
-                }
-
-                typingDiv.remove();
-                if (assistantContent) {
-                    appendMessage('assistant', assistantContent);
-                }
-                loadSessions();
-
-            } catch (e) {
-                typingDiv.remove();
-                appendMessage('assistant', '❌ 恢复执行失败：' + e.message);
-            }
-
-            isStreaming = false;
-            document.getElementById('sendBtn').disabled = false;
-        }
-
-        // 简单的 Markdown 渲染
-        function renderMarkdown(text) {
-            if (!text) return '';
-            let html = text
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/`([^`]+)`/g, '<code>$1</code>')
-                .replace(/\n/g, '<br>');
-            return html;
-        }
-
-        // 键盘事件
-        function handleKeyDown(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        }
-    </script>
+<div id="app"></div>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="/static/app.js"></script>
 </body>
 </html>

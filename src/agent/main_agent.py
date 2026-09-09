@@ -5,25 +5,38 @@ create_main_agent() + precompute_agent_context()
 """
 import os
 import sys
-from typing import Dict, Any, List, Optional
+from typing import Annotated, Dict, Any, List, Optional, NotRequired
+from typing_extensions import TypedDict
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph.message import add_messages
 
 from agent.config import llm_config
 from agent.schema import ProcurementContext, UserPreferences
 from agent.log_utils import log
 from agent.memory.prompts import MAIN_AGENT_SYSTEM_PROMPT
 from agent.tools.mock_tools import get_all_mock_tools
+from agent.tools.tool_registry import get_all_runtime_tools
 from agent.tools.planning_tools import write_todos
 from agent.tools.hitl_tools import request_order_info
 from agent.tools.async_tools import start_async_task, check_async_task
 from agent.tools.subagent_tools import task
+from agent.middleware_config import AgentMiddlewareStack
+from agent.checkpoint import PersistentCheckpointSaver
+from api_view.web_config import get_db
 
 
 # 全局 Agent 实例
 _main_agent = None
-_checkpointer = MemorySaver()
+_checkpointer = PersistentCheckpointSaver(get_db())
+
+
+class MainAgentState(TypedDict):
+    messages: Annotated[list, add_messages]
+    remaining_steps: NotRequired[int]
+    user_id: NotRequired[str]
+    username: NotRequired[str]
+    user_context: NotRequired[Dict[str, Any]]
 
 
 def _get_llm():
@@ -92,7 +105,7 @@ def create_main_agent(user_context: ProcurementContext = None):
 
     log.info("🔧 正在创建主 Agent...")
 
-    # 1. 加载 MCP 工具（优先），失败则用 Mock 工具
+    # 1. 加载 MCP 工具（优先），失败则用 Mock 工具。
     try:
         # 尝试加载 MCP 工具（异步，这里简化为直接用 mock）
         mcp_tools = get_all_mock_tools()
@@ -103,7 +116,7 @@ def create_main_agent(user_context: ProcurementContext = None):
 
     # 2. 组装所有工具
     all_tools = [
-        *mcp_tools,           # MCP 业务工具（供应商、物料、订单、库存）
+        *get_all_runtime_tools(),  # 业务、文件、技能、图表和 RAG 接口
         write_todos,          # 任务规划
         task,                 # 子 Agent 委派（同步）
         start_async_task,     # 异步任务启动
@@ -111,17 +124,26 @@ def create_main_agent(user_context: ProcurementContext = None):
         request_order_info,   # HITL 订单信息补充
     ]
 
+    unique_tools = {item.name: item for item in all_tools}
+    all_tools = list(unique_tools.values())
     log.info(f"✅ 主 Agent 共加载 {len(all_tools)} 个工具")
 
     # 3. 构建系统提示词
     system_prompt = _build_system_prompt(user_context)
 
-    # 4. 创建 LangGraph ReAct Agent
+    # 4. 将 7 个运行时中间件挂到 LangGraph 模型前后钩子。
+    middleware_stack = AgentMiddlewareStack(get_db(), user_context)
+
+    # 5. 创建 LangGraph ReAct Agent
     _main_agent = create_react_agent(
         model=_get_llm(),
         tools=all_tools,
         prompt=system_prompt,
+        state_schema=MainAgentState,
+        pre_model_hook=middleware_stack.before_model,
+        post_model_hook=middleware_stack.after_model,
         checkpointer=_checkpointer,
+        version="v2",
     )
 
     log.info("✅ 主 Agent 创建完成")
@@ -176,7 +198,9 @@ async def chat_with_agent(
         input_data = Command(resume=resume_data)
     else:
         input_data = {
-            "messages": [("user", message)]
+            "messages": [("user", message)],
+            "user_id": user_id,
+            "username": username,
         }
 
     # 执行

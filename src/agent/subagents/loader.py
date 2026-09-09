@@ -3,6 +3,7 @@
 YAML 加载 + 工具名解析
 """
 import os
+import hashlib
 import yaml
 from typing import List, Dict, Any
 from agent.log_utils import log
@@ -22,7 +23,7 @@ def load_subagent_configs() -> List[Dict[str, Any]]:
         log.warning(f"子 Agent 配置目录不存在: {CONFIGS_DIR}")
         return configs
 
-    for filename in os.listdir(CONFIGS_DIR):
+    for filename in sorted(os.listdir(CONFIGS_DIR)):
         if filename.endswith(".yaml") or filename.endswith(".yml"):
             filepath = os.path.join(CONFIGS_DIR, filename)
             try:
@@ -55,9 +56,14 @@ def resolve_subagent_tools(
     resolved = []
 
     for tool_name in tool_names:
-        # 子串匹配：pattern in tool_name
+        # Prefer exact names.  The previous substring match could silently
+        # bind a similarly named tool after a YAML file was added.
+        exact = next((tool for tool in available_tools if getattr(tool, "name", None) == tool_name), None)
+        if exact is not None:
+            resolved.append(exact)
+            continue
         for tool in available_tools:
-            if hasattr(tool, "name") and tool_name in tool.name:
+            if hasattr(tool, "name") and tool_name.lower() == tool.name.lower():
                 resolved.append(tool)
                 break
         else:
@@ -83,3 +89,17 @@ def get_subagent_by_name(name: str) -> Dict[str, Any]:
         if config.get("name") == name:
             return config
     return None
+
+
+def get_config_signature() -> str:
+    """Return a digest so long-lived processes can hot-reload YAML configs."""
+    digest = hashlib.sha256()
+    if not os.path.exists(CONFIGS_DIR):
+        return ""
+    for filename in sorted(os.listdir(CONFIGS_DIR)):
+        if filename.endswith((".yaml", ".yml")):
+            path = os.path.join(CONFIGS_DIR, filename)
+            digest.update(filename.encode("utf-8"))
+            with open(path, "rb") as handle:
+                digest.update(handle.read())
+    return digest.hexdigest()
