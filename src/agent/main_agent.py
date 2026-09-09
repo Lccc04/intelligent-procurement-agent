@@ -1,7 +1,7 @@
 """
 主 Agent 入口
 create_main_agent() + precompute_agent_context()
-基于 LangGraph 实现，替代 DeepAgents 框架
+基于 LangGraph 实现的采购智能体执行入口
 """
 import os
 import sys

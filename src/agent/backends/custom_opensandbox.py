@@ -1,5 +1,5 @@
 """
-OpenSandbox 封装（用 Docker SDK 替代）
+Docker 沙箱后端封装
 注入 SANDBOX_PATH 环境变量
 """
 import os
@@ -10,8 +10,7 @@ from agent.log_utils import log
 
 class CustomOpenSandbox:
     """
-    自定义沙箱封装
-    兼容原项目的 OpenSandbox 接口，底层使用 Docker SDK
+    为 Agent 提供统一沙箱操作接口，底层使用 Docker SDK
     """
 
     def __init__(self, manager: SandboxManager = None):

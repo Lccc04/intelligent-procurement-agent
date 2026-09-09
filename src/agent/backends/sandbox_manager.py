@@ -1,7 +1,7 @@
 """
 沙箱生命周期管理
 5 态：预热→缓存→Mongo→新建
-基于 Docker SDK 实现，替代 OpenSandbox
+基于 Docker SDK 的容器沙箱生命周期管理
 """
 import time
 import uuid
